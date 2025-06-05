@@ -1,0 +1,110 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row">
+    <!-- Friend List -->
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Friends</h5>
+            </div>
+            <div class="card-body p-0">
+                <div class="friend-list">
+                    {% for friend in friends %}
+                    <div class="friend-item" data-friend-id="{{ friend.friend_id }}">
+                        {{ friend.friend.username }}
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            <div class="card-footer">
+                <form method="POST" action="{{ url_for('add_friend') }}" class="d-flex">
+                    <input type="text" name="username" class="form-control me-2" placeholder="Add friend by username" required>
+                    <button type="submit" class="btn btn-primary">Add</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Chat Area -->
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0" id="chat-header">Select a friend to start chatting</h5>
+            </div>
+            <div class="card-body">
+                <div class="message-box" id="message-box"></div>
+                <form id="message-form" class="d-flex">
+                    <input type="text" id="message-input" class="form-control me-2" placeholder="Type your message..." disabled>
+                    <button type="submit" class="btn btn-primary" disabled>Send</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    const socket = io();
+    let currentRoom = null;
+    const messageBox = document.getElementById('message-box');
+    const messageForm = document.getElementById('message-form');
+    const messageInput = document.getElementById('message-input');
+    const chatHeader = document.getElementById('chat-header');
+
+    // Handle friend selection
+    document.querySelectorAll('.friend-item').forEach(friend => {
+        friend.addEventListener('click', () => {
+            const friendId = friend.dataset.friendId;
+            const friendName = friend.textContent.trim();
+            
+            // Leave current room if any
+            if (currentRoom) {
+                socket.emit('leave', { room: currentRoom });
+            }
+            
+            // Join new room
+            currentRoom = friendId;
+            socket.emit('join', { room: currentRoom });
+            
+            // Update UI
+            chatHeader.textContent = `Chat with ${friendName}`;
+            messageInput.disabled = false;
+            messageForm.querySelector('button').disabled = false;
+            messageBox.innerHTML = '';
+        });
+    });
+
+    // Handle message sending
+    messageForm.addEventListener('submit', (e) => {
+        e.preventDefault();
+        const message = messageInput.value.trim();
+        if (message && currentRoom) {
+            socket.emit('send_message', {
+                room: currentRoom,
+                message: message
+            });
+            messageInput.value = '';
+        }
+    });
+
+    // Handle received messages
+    socket.on('receive_message', (data) => {
+        const messageDiv = document.createElement('div');
+        messageDiv.className = `message ${data.user === '{{ current_user.username }}' ? 'sent' : 'received'}`;
+        messageDiv.textContent = `${data.user}: ${data.message}`;
+        messageBox.appendChild(messageDiv);
+        messageBox.scrollTop = messageBox.scrollHeight;
+    });
+
+    // Handle status messages
+    socket.on('status', (data) => {
+        const statusDiv = document.createElement('div');
+        statusDiv.className = 'text-center text-muted small';
+        statusDiv.textContent = data.msg;
+        messageBox.appendChild(statusDiv);
+        messageBox.scrollTop = messageBox.scrollHeight;
+    });
+</script>
+{% endblock %} 
